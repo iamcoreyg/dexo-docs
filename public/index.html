@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Speakflow Doc Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; line-height: 1.5; }
+    .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+    h1 { margin-bottom: 20px; color: #111; }
+    h2 { margin: 30px 0 15px; color: #333; font-size: 1.3em; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
+    .stat-card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+    .stat-card h3 { font-size: 0.9em; color: #666; margin-bottom: 5px; }
+    .stat-card .value { font-size: 2em; font-weight: bold; color: #111; }
+    .stat-card .value.warning { color: #e67e22; }
+    .stat-card .value.success { color: #27ae60; }
+    table { width: 100%; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-collapse: collapse; margin-bottom: 20px; }
+    th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+    th { background: #fafafa; font-weight: 600; color: #555; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 3px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
+    .badge.open { background: #fee2e2; color: #dc2626; }
+    .badge.resolved { background: #d1fae5; color: #059669; }
+    .badge.dismissed { background: #e5e7eb; color: #6b7280; }
+    .badge.outdated-ui { background: #fef3c7; color: #d97706; }
+    .badge.missing-doc { background: #dbeafe; color: #2563eb; }
+    .badge.inaccurate { background: #fce7f3; color: #db2777; }
+    .empty { color: #999; font-style: italic; padding: 20px; text-align: center; }
+    .timestamp { color: #888; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📚 Speakflow Doc Tracker</h1>
+    
+    <div class="stats" id="stats">
+      <div class="stat-card">
+        <h3>Open Issues</h3>
+        <div class="value warning" id="open-issues">-</div>
+      </div>
+      <div class="stat-card">
+        <h3>Doc Gaps</h3>
+        <div class="value warning" id="open-gaps">-</div>
+      </div>
+      <div class="stat-card">
+        <h3>Docs Reviewed</h3>
+        <div class="value" id="total-reviews">-</div>
+      </div>
+      <div class="stat-card">
+        <h3>Resolved Issues</h3>
+        <div class="value success" id="resolved-issues">-</div>
+      </div>
+    </div>
+
+    <h2>🚨 Open Issues</h2>
+    <table id="issues-table">
+      <thead>
+        <tr>
+          <th>Doc</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody id="issues-body">
+        <tr><td colspan="4" class="empty">Loading...</td></tr>
+      </tbody>
+    </table>
+
+    <h2>📋 Doc Gaps (from Support)</h2>
+    <table id="gaps-table">
+      <thead>
+        <tr>
+          <th>Ticket</th>
+          <th>Description</th>
+          <th>Suggested Doc</th>
+          <th>Created</th>
+        </tr>
+      </thead>
+      <tbody id="gaps-body">
+        <tr><td colspan="4" class="empty">Loading...</td></tr>
+      </tbody>
+    </table>
+
+    <h2>✅ Recent Reviews</h2>
+    <table id="reviews-table">
+      <thead>
+        <tr>
+          <th>Doc</th>
+          <th>Notes</th>
+          <th>Reviewed</th>
+        </tr>
+      </thead>
+      <tbody id="reviews-body">
+        <tr><td colspan="3" class="empty">Loading...</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <script>
+    async function load() {
+      const [stats, issues, gaps, reviews] = await Promise.all([
+        fetch('/api/stats').then(r => r.json()),
+        fetch('/api/issues?status=open').then(r => r.json()),
+        fetch('/api/gaps?status=open').then(r => r.json()),
+        fetch('/api/reviews').then(r => r.json())
+      ]);
+
+      document.getElementById('open-issues').textContent = stats.issues.open || 0;
+      document.getElementById('open-gaps').textContent = stats.gaps.open || 0;
+      document.getElementById('total-reviews').textContent = stats.reviews.total || 0;
+      document.getElementById('resolved-issues').textContent = stats.issues.resolved || 0;
+
+      const issuesBody = document.getElementById('issues-body');
+      issuesBody.innerHTML = issues.length ? issues.map(i => `
+        <tr>
+          <td><strong>${i.doc_title || i.doc_slug || 'General'}</strong></td>
+          <td><span class="badge ${i.issue_type}">${i.issue_type.replace('-', ' ')}</span></td>
+          <td>${i.description}</td>
+          <td class="timestamp">${new Date(i.created_at).toLocaleDateString()}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="4" class="empty">No open issues 🎉</td></tr>';
+
+      const gapsBody = document.getElementById('gaps-body');
+      gapsBody.innerHTML = gaps.length ? gaps.map(g => `
+        <tr>
+          <td>${g.ticket_subject || g.ticket_id || '-'}</td>
+          <td>${g.description}</td>
+          <td>${g.suggested_doc || '-'}</td>
+          <td class="timestamp">${new Date(g.created_at).toLocaleDateString()}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="4" class="empty">No doc gaps identified</td></tr>';
+
+      const reviewsBody = document.getElementById('reviews-body');
+      reviewsBody.innerHTML = reviews.length ? reviews.slice(0, 10).map(r => `
+        <tr>
+          <td><strong>${r.doc_title || r.doc_slug}</strong></td>
+          <td>${r.notes || '-'}</td>
+          <td class="timestamp">${new Date(r.reviewed_at).toLocaleDateString()}</td>
+        </tr>
+      `).join('') : '<tr><td colspan="3" class="empty">No reviews yet</td></tr>';
+    }
+
+    load();
+  </script>
+</body>
+</html>
